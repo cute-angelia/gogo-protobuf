@@ -62,6 +62,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	goutils "github.com/cute-angelia/goutils"
 	"github.com/gogo/protobuf/gogoproto"
 	"github.com/gogo/protobuf/proto"
 	descriptor "github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
@@ -2486,8 +2487,9 @@ func (g *Generator) generateGet(mc *msgCtx, protoField *descriptor.FieldDescript
 
 // generateInternalStructFields just adds the XXX_<something> fields to the message struct.
 func (g *Generator) generateInternalStructFields(mc *msgCtx, topLevelFields []topLevelField) {
+	// fixed cyw
 	if gogoproto.HasUnkeyed(g.file.FileDescriptorProto, mc.message.DescriptorProto) {
-		g.P("XXX_NoUnkeyedLiteral\tstruct{} `json:\"-\"`") // prevent unkeyed struct literals
+		g.P("XXX_NoUnkeyedLiteral\tstruct{} `gorm:\"-\" json:\"-\"`") // prevent unkeyed struct literals
 	}
 	if len(mc.message.ExtensionRange) > 0 {
 		if gogoproto.HasExtensionsMap(g.file.FileDescriptorProto, mc.message.DescriptorProto) {
@@ -2495,16 +2497,16 @@ func (g *Generator) generateInternalStructFields(mc *msgCtx, topLevelFields []to
 			if opts := mc.message.Options; opts != nil && opts.GetMessageSetWireFormat() {
 				messageset = "protobuf_messageset:\"1\" "
 			}
-			g.P(g.Pkg["proto"], ".XXX_InternalExtensions `", messageset, "json:\"-\"`")
+			g.P(g.Pkg["proto"], ".XXX_InternalExtensions `", messageset, "gorm:\"-\" json:\"-\"`")
 		} else {
-			g.P("XXX_extensions\t\t[]byte `protobuf:\"bytes,0,opt\" json:\"-\"`")
+			g.P("XXX_extensions\t\t[]byte `protobuf:\"bytes,0,opt\" gorm:\"-\" json:\"-\"`")
 		}
 	}
 	if gogoproto.HasUnrecognized(g.file.FileDescriptorProto, mc.message.DescriptorProto) {
-		g.P("XXX_unrecognized\t[]byte `json:\"-\"`")
+		g.P("XXX_unrecognized\t[]byte `gorm:\"-\" json:\"-\"`")
 	}
 	if gogoproto.HasSizecache(g.file.FileDescriptorProto, mc.message.DescriptorProto) {
-		g.P("XXX_sizecache\tint32 `json:\"-\"`")
+		g.P("XXX_sizecache\tint32 `gorm:\"-\" json:\"-\"`")
 	}
 }
 
@@ -2775,6 +2777,14 @@ func (g *Generator) generateCommonMethods(mc *msgCtx) {
 	g.Out()
 	g.P("}")
 
+	// fixed cyw add gorm tablename
+	if strings.Contains(mc.goName, "Model") {
+		tableName := goutils.UnderscoreName(strings.Split(mc.goName, "Model")[0])
+		g.P("func (m *", mc.goName, ") TableName() string {")
+		g.P("return ", "\"", strings.ToLower(tableName), "\"", "")
+		g.P("}")
+	}
+
 	g.P("var xxx_messageInfo_", mc.goName, " ", g.Pkg["proto"], ".InternalMessageInfo")
 }
 
@@ -2847,7 +2857,20 @@ func (g *Generator) generateMessage(message *Descriptor) {
 		if gogoMoreTags != nil {
 			moreTags = " " + *gogoMoreTags
 		}
-		tag := fmt.Sprintf("protobuf:%s json:%q%s", g.goTag(message, field, wiretype), jsonTag, moreTags)
+
+		// origin
+		// tag := fmt.Sprintf("protobuf:%s json:%q%s", g.goTag(message, field, wiretype), jsonTag, moreTags)
+
+		// fixed cyw add gorm and check isRequired
+		tag := fmt.Sprintf("protobuf:%s json:%q%s gorm:%q", g.goTag(message, field, wiretype), jsonTag, moreTags, "column:"+jsonName+"")
+		if jsonName == "id" {
+			tag = strings.Replace(tag, "column:", "primary_key;column:", -1)
+		}
+		if isRequired(field) {
+			tag = fmt.Sprintf("protobuf:%s json:%q%s gorm:%q", g.goTag(message, field, wiretype), jsonTag, moreTags, "column:"+jsonName+"")
+		}
+		// fixed cyw end
+
 		if *field.Type == descriptor.FieldDescriptorProto_TYPE_MESSAGE && gogoproto.IsEmbed(field) {
 			fieldName = ""
 		}
