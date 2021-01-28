@@ -2843,7 +2843,9 @@ func (g *Generator) generateMessage(message *Descriptor) {
 
 		typename, wiretype := g.GoType(message, field)
 		jsonName := *field.Name
-		jsonTag := jsonName + ",omitempty"
+		// fixed cyw
+		// jsonTag := jsonName + ",omitempty"
+		jsonTag := jsonName
 		repeatedNativeType := (!field.IsMessage() && !gogoproto.IsCustomType(field) && field.IsRepeated())
 		if !gogoproto.IsNullable(field) && !repeatedNativeType {
 			jsonTag = jsonName
